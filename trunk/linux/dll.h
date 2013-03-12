@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <dlfcn.h>
 
-namespace pcm {
+namespace bcm {
 
 	class Dll
 	{
@@ -38,6 +38,6 @@ namespace pcm {
 		}
 	};
 
-} // namespace pcm
+} // namespace bcm
 
 #endif
