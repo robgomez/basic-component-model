@@ -111,7 +111,7 @@ namespace bcm {
 		}
 	};
 
-} // namespace pcm
+} // namespace bcm
 
 #endif
 

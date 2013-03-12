@@ -1,42 +1,117 @@
 #ifndef COMPONENT_MANAGER_H
 #define COMPONENT_MANAGER_H
 
-#include "component.h"
-#ifdef _WIN32
-#include <bcm/win32/dll.h>
-#else
+/**
+@file dll.h
+@brief Linux DLL manager singleton class.
+
+A DLL class for managing Linux dynamic linked libraries
+that contain BCM components.
+*/
+
+#include <bcm/component.h>
 #include <bcm/linux/dll.h>
-#endif
+#include <string>
+#include <map>
+#include <iostream>
 
+namespace bcm {
 
-namespace pcm {
+	enum LoadComponentResult {
+		LC_NODLL,
+		LC_NOCOMPONENT,
+		LC_ALREADYUSED,
+		LC_OK
+	};
+
+	enum GetComponentResult {
+		GC_UNREGISTERED,
+		GC_NOCOMPONENT,
+		GC_INCOMPLETE,
+		GC_OK
+	};
+
+        /**
+        @class ComponentManager
+        @brief Linux DLL manager singleton class.
+
+        A DLL class for managing Linux dynamic linked libraries
+	that contain BCM components.
+        */
 
 	class ComponentManager
 	{
-		typedef const ComponentSet *(GET_COMPONENT_SET)();
-	public:
+		typedef Component *(*GET_COMPONENT)(GetComponentResult *result);
+/*#ifdef _UNICODE
+		typedef std::wstring tstring;
+#else
+		typedef std::string tstring;
+#endif*/
+		struct ComponentData {
+			std::string name;
+			Dll *dll;
+		};
+		std::map<std::string, ComponentData> dllMap;
+	protected:
 		ComponentManager()
 		{
 		}
-		bool loadComponentSet()
+	public:
+		static ComponentManager &instance()
 		{
+			static ComponentManager object;
+			return object;
 		}
-		bool releaseComponentSet()
+		LoadComponentResult loadComponent(const char *dllName)
 		{
+			Dll *dll = new Dll;
+			if (dll->open(dllName) == false)
+				return LC_NODLL;
+			GET_COMPONENT lpGetComponent = (GET_COMPONENT)dll->getProc("getComponent");
+			if (lpGetComponent == (GET_COMPONENT)NULL)
+				return LC_NOCOMPONENT;
+			else {
+				GetComponentResult result;
+				Component *component = lpGetComponent(&result);
+				if (dllMap.find(component->getID()) != dllMap.end())
+					return LC_ALREADYUSED;
+				ComponentData cd;
+				cd.name = component->getName();
+				cd.dll = dll;
+				dllMap[component->getID()] = cd;
+			}
+			return LC_OK;
 		}
-		ComponentSet *getComponentSet(const char *dllName)
+		bool releaseComponent(const char *id)
 		{
-			ComponentDatabase &compdb = ComponentDatabase::instance();
-			if (open(compdb.getFileName(Component::name())) == false)
-				throw std::runtime_error(compdb.getLoaderName(Component::name()));
-			CREATE_FUNCTION lpGetInterface = (CREATE_FUNCTION)getProc(compdb.getLoaderName(Component::name()));
-			if (lpGetInterface == (CREATE_FUNCTION)NULL)
-				throw std::runtime_error(compdb.getLoaderName(Component::name()));
-			return (*lpGetInterface)();
+			std::map<std::string, ComponentData>::iterator it = dllMap.find(id);
+			if (it != dllMap.end()) {
+				delete it->second.dll;
+				dllMap.erase(it);
+				return true;
+			}
+			return false;
 		}
-   	};
+		GetComponentResult getComponent(/*in*/ const char *id, /*out*/ Component **component)
+		{
+			std::map<std::string, ComponentData>::iterator it = dllMap.find(id);
+			if (it == dllMap.end()) {
+				*component = 0;
+				return GC_UNREGISTERED;
+			}
+			Dll *dll = it->second.dll;
+			GET_COMPONENT lpGetComponent = (GET_COMPONENT)dll->getProc("getComponent");
+			if (lpGetComponent == (GET_COMPONENT)NULL) {
+				*component = 0;
+				return GC_NOCOMPONENT;
+			}
+			GetComponentResult result;
+			*component = (*lpGetComponent)(&result);
+			return result;
+		}
+	};
 
-} // namespace pcm
+} // namespace bcm
 
 #endif
 
