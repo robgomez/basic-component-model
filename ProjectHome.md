@@ -1,0 +1,1 @@
+The Basic Component Model is a simple component model for dynamically linked C++ applications.
